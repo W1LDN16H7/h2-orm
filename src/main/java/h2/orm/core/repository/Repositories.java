@@ -1,4 +1,4 @@
-package h2.orm.repository;
+package h2.orm.core.repository;
 
 import h2.orm.core.EntityManagerProvider;
 import jakarta.persistence.EntityManager;

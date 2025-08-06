@@ -1,4 +1,4 @@
-package h2.orm.repository;
+package h2.orm.core.repository;
 
 import java.io.Serializable;
 import java.util.List;

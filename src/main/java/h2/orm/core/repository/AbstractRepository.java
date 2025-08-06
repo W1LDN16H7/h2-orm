@@ -1,4 +1,4 @@
-package h2.orm.repository;
+package h2.orm.core.repository;
 
 import h2.orm.core.EntityManagerProvider;
 import h2.orm.core.MetadataManager;
@@ -6,10 +6,6 @@ import h2.orm.core.QueryExecutor;
 import h2.orm.core.TransactionManager;
 import h2.orm.exception.ExceptionHandler;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Root;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

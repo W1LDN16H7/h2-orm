@@ -1,7 +1,7 @@
 package h2.orm.example;
 
 import h2.orm.H2ORM;
-import h2.orm.repository.JpaRepository;
+import h2.orm.core.repository.JpaRepository;
 
 import java.math.BigDecimal;
 import java.util.List;

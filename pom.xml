@@ -5,13 +5,13 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.h2.orm</groupId>
-    <artifactId>H2-ORM</artifactId>
-    <version>v0.0.1</version>
+    <artifactId>h2-orm</artifactId>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>h2-orm</name>
-    <description>Modern JPA-based database handler supporting H2, MySQL, PostgreSQL, and SQLite with advanced features</description>
-    <url>https://github.com/W1LDN16H7/h2-orm.git</url>
+    <name>H2-ORM</name>
+    <description>Modern Spring Boot-style ORM library supporting H2, MySQL, PostgreSQL, and SQLite with advanced backup/export features</description>
+    <url>https://github.com/W1LDN16H7/h2-orm</url>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -256,16 +256,16 @@
 
     <developers>
         <developer>
-            <id>Kapil Kumar</id>
-            <name>KP enterprise Team</name>
-            <email>kapil.campus@gmail.com</email>
+            <id>h2orm-team</id>
+            <name>H2-ORM Development Team</name>
+            <email>team@h2orm.com</email>
         </developer>
     </developers>
 
     <scm>
         <connection>scm:git:git://github.com/W1LDN16H7/h2-orm.git</connection>
-        <developerConnection>scm:git:ssh://github.com:W1LDN16H7/h2-orm.git</developerConnection>
-        <url>https://github.com/W1LDN16H7/h2-orm.git/tree/main</url>
+        <developerConnection>scm:git:ssh://github.com/W1LDN16H7/h2-orm.git</developerConnection>
+        <url>https://github.com/W1LDN16H7/h2-orm</url>
     </scm>
 
 </project>
