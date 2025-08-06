@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+    <comment>H2-ORM XML Configuration</comment>
+
+    <!-- Database Settings -->
+    <entry key="h2orm.database.type">h2</entry>
+    <entry key="h2orm.database.mode">file</entry>
+    <entry key="h2orm.database.path">./data/h2orm</entry>
+    <entry key="h2orm.database.username">sa</entry>
+    <entry key="h2orm.database.password"></entry>
+
+    <!-- Connection Pool Settings -->
+    <entry key="h2orm.pool.size">10</entry>
+    <entry key="h2orm.pool.timeout">30000</entry>
+    <entry key="h2orm.pool.idle.timeout">600000</entry>
+    <entry key="h2orm.pool.max.lifetime">1800000</entry>
+
+    <!-- JPA/Hibernate Settings -->
+    <entry key="h2orm.jpa.ddl.auto">update</entry>
+    <entry key="h2orm.jpa.show.sql">false</entry>
+    <entry key="h2orm.jpa.format.sql">false</entry>
+    <entry key="h2orm.jpa.batch.size">20</entry>
+    <entry key="h2orm.jpa.cache.use.second.level">true</entry>
+    <entry key="h2orm.jpa.cache.use.query">true</entry>
+
+    <!-- Export Settings -->
+    <entry key="h2orm.export.csv.delimiter">,</entry>
+    <entry key="h2orm.export.excel.sheet.name">Data</entry>
+    <entry key="h2orm.export.json.pretty.print">true</entry>
+
+    <!-- Backup Settings -->
+    <entry key="h2orm.backup.auto.enabled">false</entry>
+    <entry key="h2orm.backup.interval.hours">24</entry>
+    <entry key="h2orm.backup.retention.days">7</entry>
+    <entry key="h2orm.backup.compression">true</entry>
+
+    <!-- Monitoring Settings -->
+    <entry key="h2orm.monitoring.enabled">true</entry>
+    <entry key="h2orm.monitoring.query.log.enabled">false</entry>
+    <entry key="h2orm.monitoring.slow.query.threshold.ms">1000</entry>
+</properties>
+
