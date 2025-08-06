@@ -11,7 +11,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.lang.reflect.ParameterizedType;
+import java.text.MessageFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -249,13 +251,11 @@ public abstract class AbstractRepository<T, ID extends Serializable> implements 
             // Extract IDs and use QueryExecutor for batch delete
             List<ID> ids = new ArrayList<>();
             for (T entity : entities) {
-                @SuppressWarnings("unchecked")
-                ID id = (ID) MetadataManager.getIdValue(entity);
+                ID id = MetadataManager.getEntityId(entity);
                 if (id != null) {
                     ids.add(id);
                 }
             }
-
             if (!ids.isEmpty()) {
                 String jpql = "DELETE FROM " + entityClass.getSimpleName() + " e WHERE e.id IN :ids";
                 QueryExecutor.executeUpdate(jpql, Map.of("ids", ids));
@@ -266,7 +266,6 @@ public abstract class AbstractRepository<T, ID extends Serializable> implements 
     @Override
     public void deleteAllInBatch() {
         ExceptionHandler.safeExecute("delete all entities in batch", () -> {
-            // Use QueryExecutor for optimized bulk delete
             String jpql = "DELETE FROM " + entityClass.getSimpleName();
             QueryExecutor.executeUpdate(jpql);
         });
@@ -277,9 +276,7 @@ public abstract class AbstractRepository<T, ID extends Serializable> implements 
         ExceptionHandler.safeExecute("delete entities by IDs in batch", () -> {
             List<ID> idList = new ArrayList<>();
             ids.forEach(idList::add);
-
             if (!idList.isEmpty()) {
-                // Use QueryExecutor for batch delete
                 String jpql = "DELETE FROM " + entityClass.getSimpleName() + " e WHERE e.id IN :ids";
                 QueryExecutor.executeUpdate(jpql, Map.of("ids", idList));
             }
@@ -303,33 +300,317 @@ public abstract class AbstractRepository<T, ID extends Serializable> implements 
         return getOne(id);
     }
 
-    // Additional utility methods using QueryExecutor
+    // Sorting and Paging implementations
 
-    /**
-     * Find entities with pagination using QueryExecutor
-     */
-    public List<T> findAll(int offset, int limit) {
-        return ExceptionHandler.safeExecute("find entities with pagination", () -> {
+    @Override
+    public List<T> findAll(Sort sort) {
+        return ExceptionHandler.safeExecute("find all entities with sort", () -> {
             String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e";
-            return QueryExecutor.executePaginatedQuery(jpql, entityClass, null, offset, limit);
+            if (sort.isSorted()) {
+                jpql += sort.toOrderByClause("e");
+            }
+            return QueryExecutor.executeQuery(jpql, entityClass);
         });
     }
 
-    /**
-     * Execute custom JPQL query
-     */
-    public List<T> findByJpql(String jpql, Map<String, Object> parameters) {
-        return ExceptionHandler.safeExecute("execute custom JPQL query", () -> {
-            return QueryExecutor.executeQuery(jpql, entityClass, parameters);
+    @Override
+    public Page<T> findAll(Pageable pageable) {
+        return ExceptionHandler.safeExecute("find all entities with pagination", () -> {
+            // First, get the total count
+            String countJpql = "SELECT COUNT(e) FROM " + entityClass.getSimpleName() + " e";
+            Long total = QueryExecutor.executeSingleResultQuery(countJpql, Long.class);
+
+            if (total == 0) {
+                return new PageImpl<>(new ArrayList<>(), pageable, 0);
+            }
+
+            // Then get the actual data
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e";
+            if (pageable.getSort().isSorted()) {
+                jpql += pageable.getSort().toOrderByClause("e");
+            }
+
+            EntityManager em = getEntityManager();
+            try {
+                var query = em.createQuery(jpql, entityClass);
+
+                if (pageable.isPaged()) {
+                    query.setFirstResult((int) pageable.getOffset());
+                    query.setMaxResults(pageable.getPageSize());
+                }
+
+                List<T> content = query.getResultList();
+                return new PageImpl<>(content, pageable, total);
+            } finally {
+                EntityManagerProvider.closeEntityManager();
+            }
         });
     }
 
-    /**
-     * Execute custom native SQL query
-     */
-    public List<T> findByNativeQuery(String sql, Map<String, Object> parameters) {
-        return ExceptionHandler.safeExecute("execute custom native query", () -> {
-            return QueryExecutor.executeNativeQuery(sql, entityClass, parameters);
+    // Query methods implementation
+
+    @Override
+    public List<T> findByField(String fieldName, Object value) {
+        return ExceptionHandler.safeExecute("find entities by field " + fieldName, () -> {
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " = :value";
+            return QueryExecutor.executeQuery(jpql, entityClass, Map.of("value", value));
+        });
+    }
+
+    @Override
+    public List<T> findByField(String fieldName, Object value, Sort sort) {
+        return ExceptionHandler.safeExecute("find entities by field " + fieldName + " with sort", () -> {
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " = :value";
+            if (sort.isSorted()) {
+                jpql += sort.toOrderByClause("e");
+            }
+            return QueryExecutor.executeQuery(jpql, entityClass, Map.of("value", value));
+        });
+    }
+
+    @Override
+    public Page<T> findByField(String fieldName, Object value, Pageable pageable) {
+        return ExceptionHandler.safeExecute("find entities by field " + fieldName + " with pagination", () -> {
+            // Get count first
+            String countJpql = "SELECT COUNT(e) FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " = :value";
+            Long total = QueryExecutor.executeSingleResultQuery(countJpql, Long.class, Map.of("value", value));
+
+            if (total == 0) {
+                return new PageImpl<>(new ArrayList<>(), pageable, 0);
+            }
+
+            // Get data
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " = :value";
+            if (pageable.getSort().isSorted()) {
+                jpql += pageable.getSort().toOrderByClause("e");
+            }
+
+            EntityManager em = getEntityManager();
+            try {
+                var query = em.createQuery(jpql, entityClass);
+                query.setParameter("value", value);
+
+                if (pageable.isPaged()) {
+                    query.setFirstResult((int) pageable.getOffset());
+                    query.setMaxResults(pageable.getPageSize());
+                }
+
+                List<T> content = query.getResultList();
+                return new PageImpl<>(content, pageable, total);
+            } finally {
+                EntityManagerProvider.closeEntityManager();
+            }
+        });
+    }
+
+    @Override
+    public List<T> findByFields(Map<String, Object> fieldValues) {
+        return ExceptionHandler.safeExecute("find entities by multiple fields", () -> {
+            if (fieldValues.isEmpty()) {
+                return findAll();
+            }
+
+            StringBuilder jpql = new StringBuilder("SELECT e FROM " + entityClass.getSimpleName() + " e WHERE ");
+            Map<String, Object> parameters = new HashMap<>();
+
+            int index = 0;
+            for (Map.Entry<String, Object> entry : fieldValues.entrySet()) {
+                if (index > 0) {
+                    jpql.append(" AND ");
+                }
+                String paramName = "param" + index;
+                jpql.append("e.").append(entry.getKey()).append(" = :").append(paramName);
+                parameters.put(paramName, entry.getValue());
+                index++;
+            }
+
+            return QueryExecutor.executeQuery(jpql.toString(), entityClass, parameters);
+        });
+    }
+
+    @Override
+    public List<T> findByFields(Map<String, Object> fieldValues, Sort sort) {
+        return ExceptionHandler.safeExecute("find entities by multiple fields with sort", () -> {
+            if (fieldValues.isEmpty()) {
+                return findAll(sort);
+            }
+
+            StringBuilder jpql = new StringBuilder("SELECT e FROM " + entityClass.getSimpleName() + " e WHERE ");
+            Map<String, Object> parameters = new HashMap<>();
+
+            int index = 0;
+            for (Map.Entry<String, Object> entry : fieldValues.entrySet()) {
+                if (index > 0) {
+                    jpql.append(" AND ");
+                }
+                String paramName = "param" + index;
+                jpql.append("e.").append(entry.getKey()).append(" = :").append(paramName);
+                parameters.put(paramName, entry.getValue());
+                index++;
+            }
+
+            if (sort.isSorted()) {
+                jpql.append(sort.toOrderByClause("e"));
+            }
+
+            return QueryExecutor.executeQuery(jpql.toString(), entityClass, parameters);
+        });
+    }
+
+    @Override
+    public Page<T> findByFields(Map<String, Object> fieldValues, Pageable pageable) {
+        return ExceptionHandler.safeExecute("find entities by multiple fields with pagination", () -> {
+            if (fieldValues.isEmpty()) {
+                return findAll(pageable);
+            }
+
+            StringBuilder whereClause = new StringBuilder(" WHERE ");
+            Map<String, Object> parameters = new HashMap<>();
+
+            int index = 0;
+            for (Map.Entry<String, Object> entry : fieldValues.entrySet()) {
+                if (index > 0) {
+                    whereClause.append(" AND ");
+                }
+                String paramName = "param" + index;
+                whereClause.append("e.").append(entry.getKey()).append(" = :").append(paramName);
+                parameters.put(paramName, entry.getValue());
+                index++;
+            }
+
+            // Get count
+            String countJpql = "SELECT COUNT(e) FROM " + entityClass.getSimpleName() + " e" + whereClause;
+            Long total = QueryExecutor.executeSingleResultQuery(countJpql, Long.class, parameters);
+
+            if (total == 0) {
+                return new PageImpl<>(new ArrayList<>(), pageable, 0);
+            }
+
+            // Get data
+            String jpql = MessageFormat.format("SELECT e FROM {0} e{1}", entityClass.getSimpleName(), whereClause);
+            if (pageable.getSort().isSorted()) {
+                jpql += pageable.getSort().toOrderByClause("e");
+            }
+
+            EntityManager em = getEntityManager();
+            try {
+                var query = em.createQuery(jpql, entityClass);
+                for (Map.Entry<String, Object> entry : parameters.entrySet()) {
+                    query.setParameter(entry.getKey(), entry.getValue());
+                }
+
+                if (pageable.isPaged()) {
+                    query.setFirstResult((int) pageable.getOffset());
+                    query.setMaxResults(pageable.getPageSize());
+                }
+
+                List<T> content = query.getResultList();
+                return new PageImpl<>(content, pageable, total);
+            } finally {
+                EntityManagerProvider.closeEntityManager();
+            }
+        });
+    }
+
+    @Override
+    public Optional<T> findFirstByField(String fieldName, Object value) {
+        return ExceptionHandler.safeExecute("find first entity by field " + fieldName, () -> {
+            EntityManager em = getEntityManager();
+            try {
+                String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " = :value";
+                var query = em.createQuery(jpql, entityClass);
+                query.setParameter("value", value);
+                query.setMaxResults(1);
+
+                List<T> results = query.getResultList();
+                return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+            } finally {
+                EntityManagerProvider.closeEntityManager();
+            }
+        });
+    }
+
+    @Override
+    public boolean existsByField(String fieldName, Object value) {
+        return ExceptionHandler.safeExecute("check if entity exists by field " + fieldName, () -> {
+            String jpql = "SELECT COUNT(e) FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " = :value";
+            Long count = QueryExecutor.executeSingleResultQuery(jpql, Long.class, Map.of("value", value));
+            return count > 0;
+        });
+    }
+
+    @Override
+    public long countByField(String fieldName, Object value) {
+        return ExceptionHandler.safeExecute("count entities by field " + fieldName, () -> {
+            String jpql = "SELECT COUNT(e) FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " = :value";
+            return QueryExecutor.executeSingleResultQuery(jpql, Long.class, Map.of("value", value));
+        });
+    }
+
+    @Override
+    public void deleteByField(String fieldName, Object value) {
+        ExceptionHandler.safeExecute("delete entities by field " + fieldName, () -> {
+            String jpql = "DELETE FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " = :value";
+            QueryExecutor.executeUpdate(jpql, Map.of("value", value));
+        });
+    }
+
+    @Override
+    public List<T> findByFieldIsNull(String fieldName) {
+        return ExceptionHandler.safeExecute("find entities where field " + fieldName + " is null", () -> {
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " IS NULL";
+            return QueryExecutor.executeQuery(jpql, entityClass);
+        });
+    }
+
+    @Override
+    public List<T> findByFieldIsNotNull(String fieldName) {
+        return ExceptionHandler.safeExecute("find entities where field " + fieldName + " is not null", () -> {
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " IS NOT NULL";
+            return QueryExecutor.executeQuery(jpql, entityClass);
+        });
+    }
+
+    @Override
+    public List<T> findByFieldIn(String fieldName, java.util.Collection<?> values) {
+        return ExceptionHandler.safeExecute("find entities where field " + fieldName + " is in collection", () -> {
+            if (values.isEmpty()) {
+                return new ArrayList<>();
+            }
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " IN :values";
+            return QueryExecutor.executeQuery(jpql, entityClass, Map.of("values", values));
+        });
+    }
+
+    @Override
+    public List<T> findByFieldBetween(String fieldName, Object startValue, Object endValue) {
+        return ExceptionHandler.safeExecute("find entities where field " + fieldName + " is between values", () -> {
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " BETWEEN :start AND :end";
+            return QueryExecutor.executeQuery(jpql, entityClass, Map.of("start", startValue, "end", endValue));
+        });
+    }
+
+    @Override
+    public List<T> findByFieldContaining(String fieldName, String value) {
+        return ExceptionHandler.safeExecute("find entities where field " + fieldName + " contains value", () -> {
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " LIKE :value";
+            return QueryExecutor.executeQuery(jpql, entityClass, Map.of("value", "%" + value + "%"));
+        });
+    }
+
+    @Override
+    public List<T> findByFieldStartingWith(String fieldName, String value) {
+        return ExceptionHandler.safeExecute("find entities where field " + fieldName + " starts with value", () -> {
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " LIKE :value";
+            return QueryExecutor.executeQuery(jpql, entityClass, Map.of("value", value + "%"));
+        });
+    }
+
+    @Override
+    public List<T> findByFieldEndingWith(String fieldName, String value) {
+        return ExceptionHandler.safeExecute("find entities where field " + fieldName + " ends with value", () -> {
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " LIKE :value";
+            return QueryExecutor.executeQuery(jpql, entityClass, Map.of("value", "%" + value));
         });
     }
 }

@@ -50,6 +50,53 @@ public class MetadataManager {
     }
 
     /**
+     * Get entity ID value using reflection
+     */
+    @SuppressWarnings("unchecked")
+    public static <ID> ID getEntityId(Object entity) {
+        if (entity == null) {
+            return null;
+        }
+
+        try {
+            EntityMetadata metadata = getEntityMetadata(entity.getClass());
+            Field idField = metadata.getIdField();
+            if (idField != null) {
+                idField.setAccessible(true);
+                return (ID) idField.get(entity);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to get entity ID for {}: {}", entity.getClass().getSimpleName(), e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Check if entity is new (has null or default ID)
+     */
+    public static boolean isEntityNew(Object entity) {
+        if (entity == null) {
+            return false;
+        }
+
+        Object id = getEntityId(entity);
+        if (id == null) {
+            return true;
+        }
+
+        // Check for default values that indicate new entity
+        if (id instanceof Number) {
+            return ((Number) id).longValue() == 0;
+        }
+
+        if (id instanceof String) {
+            return ((String) id).isEmpty();
+        }
+
+        return false;
+    }
+
+    /**
      * Get ID field for entity
      */
     public static Field getIdField(Class<?> entityClass) {
@@ -75,7 +122,7 @@ public class MetadataManager {
     /**
      * Check if entity is new (ID is null or zero)
      */
-    public static boolean isEntityNew(Object entity) {
+    public static boolean isEntityNewById(Object entity) {
         Object idValue = getIdValue(entity);
         if (idValue == null) {
             return true;

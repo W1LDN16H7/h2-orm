@@ -1,10 +1,13 @@
 package h2.orm.core.service;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.hibernate.Hibernate;
+import org.hibernate.proxy.HibernateProxy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,7 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * Professional export service with mature file handling
+ * Professional export service with mature file handling and Hibernate proxy support
  * Automatically creates directories, handles file conflicts, and provides robust error handling
  */
 public class ExportService {
@@ -37,17 +40,17 @@ public class ExportService {
         this.objectMapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
         this.objectMapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-        // Add Hibernate module for proper proxy handling
+        // Add custom mixin to ignore Hibernate proxy properties
+        this.objectMapper.addMixIn(HibernateProxy.class, HibernateProxyMixin.class);
+
+        // Try to register Hibernate5Module if available
         try {
-            // Try to register Hibernate5Module if available
             Class<?> hibernateModuleClass = Class.forName("com.fasterxml.jackson.datatype.hibernate5.Hibernate5Module");
             Object hibernateModule = hibernateModuleClass.getDeclaredConstructor().newInstance();
             this.objectMapper.registerModule((com.fasterxml.jackson.databind.Module) hibernateModule);
             logger.debug("Hibernate5Module registered for JSON serialization");
         } catch (Exception e) {
-            // Hibernate module not available, use manual configuration
             logger.debug("Hibernate5Module not available, using manual proxy handling");
-            this.objectMapper.addMixIn(Object.class, HibernateProxyMixin.class);
         }
     }
 
@@ -402,9 +405,9 @@ public class ExportService {
     }
 
     /**
-     * Mixin class to ignore Hibernate proxy properties during JSON serialization
+     * Mixin to ignore Hibernate proxy internals during JSON serialization
      */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
-    private static abstract class HibernateProxyMixin {
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private static class HibernateProxyMixin {
     }
 }

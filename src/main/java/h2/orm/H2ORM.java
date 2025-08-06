@@ -168,10 +168,13 @@ public class H2ORM {
      * Usage: H2ORM.exportToCsv(userList, "./exports/users.csv");
      */
     public static <T> void exportToCsv(List<T> data, String filePath) {
-        // For pre-loaded data, we can export directly since the user has already loaded it
-        exportService.toCsv(data, filePath);
+        // Ensure export happens within a transaction to handle any lazy-loaded data
+        TransactionManager.executeInTransaction(em -> {
+            exportService.toCsv(data, filePath);
+            return null;
+        });
     }
-    
+
     /**
      * Export all data from an entity to Excel
      * Usage: H2ORM.exportToExcel(User.class, "./exports/users.xlsx");
@@ -180,21 +183,22 @@ public class H2ORM {
         TransactionManager.executeInTransaction(em -> {
             JpaRepository<T, ?> repo = repository(entityClass);
             List<T> data = repo.findAll();
-            // Process export within the same transaction to avoid LazyInitializationException
             exportService.toExcel(data, filePath);
             return null;
         });
     }
-    
+
     /**
      * Export specific data to Excel
      * Usage: H2ORM.exportToExcel(userList, "./exports/users.xlsx");
      */
     public static <T> void exportToExcel(List<T> data, String filePath) {
-        // For pre-loaded data, we can export directly since the user has already loaded it
-        exportService.toExcel(data, filePath);
+        TransactionManager.executeInTransaction(em -> {
+            exportService.toExcel(data, filePath);
+            return null;
+        });
     }
-    
+
     /**
      * Export all data from an entity to JSON
      * Usage: H2ORM.exportToJson(User.class, "./exports/users.json");
@@ -203,19 +207,20 @@ public class H2ORM {
         TransactionManager.executeInTransaction(em -> {
             JpaRepository<T, ?> repo = repository(entityClass);
             List<T> data = repo.findAll();
-            // Process export within the same transaction to avoid LazyInitializationException
             exportService.toJson(data, filePath);
             return null;
         });
     }
-    
+
     /**
      * Export specific data to JSON
      * Usage: H2ORM.exportToJson(userList, "./exports/users.json");
      */
     public static <T> void exportToJson(List<T> data, String filePath) {
-        // For pre-loaded data, we can export directly since the user has already loaded it
-        exportService.toJson(data, filePath);
+        TransactionManager.executeInTransaction(em -> {
+            exportService.toJson(data, filePath);
+            return null;
+        });
     }
 
     // ===== UTILITY SERVICES =====
@@ -232,5 +237,95 @@ public class H2ORM {
      */
     public static ExportService getExportService() {
         return exportService;
+    }
+
+    // ===== TABLE MANAGEMENT SERVICES =====
+
+    /**
+     * Create tables for all registered entities
+     * Usage: H2ORM.createAll();
+     */
+    public static void createAllTables() {
+        h2.orm.core.service.TableManager.createAll();
+    }
+
+    /**
+     * Create table for specific entity
+     * Usage: H2ORM.createTable(User.class);
+     */
+    public static void createTable(Class<?> entityClass) {
+        h2.orm.core.service.TableManager.create(entityClass);
+    }
+
+    /**
+     * Drop table for specific entity
+     * Usage: H2ORM.dropTable(User.class);
+     */
+    public static void dropTable(Class<?> entityClass) {
+        h2.orm.core.service.TableManager.drop(entityClass);
+    }
+
+    /**
+     * Drop all tables
+     * Usage: H2ORM.dropAllTables();
+     */
+    public static void dropAllTables() {
+        h2.orm.core.service.TableManager.dropAll();
+    }
+
+    /**
+     * Truncate table (remove all data but keep structure)
+     * Usage: H2ORM.truncateTable(User.class);
+     */
+    public static void truncateTable(Class<?> entityClass) {
+        h2.orm.core.service.TableManager.truncate(entityClass);
+    }
+
+    /**
+     * Truncate all tables
+     * Usage: H2ORM.truncateAllTables();
+     */
+    public static void truncateAllTables() {
+        h2.orm.core.service.TableManager.truncateAll();
+    }
+
+    /**
+     * Check if table exists
+     * Usage: boolean exists = H2ORM.tableExists("users");
+     */
+    public static boolean tableExists(String tableName) {
+        return h2.orm.core.service.TableManager.exists(tableName);
+    }
+
+    /**
+     * Get table row count
+     * Usage: long count = H2ORM.getTableRowCount(User.class);
+     */
+    public static long getTableRowCount(Class<?> entityClass) {
+        return h2.orm.core.service.TableManager.getByRowCount(entityClass);
+    }
+
+    /**
+     * Get table information
+     * Usage: TableInfo info = H2ORM.getTableInfo(User.class);
+     */
+    public static h2.orm.core.service.TableManager.TableInfo getTableInfo(Class<?> entityClass) {
+        return h2.orm.core.service.TableManager.getInfo(entityClass);
+    }
+
+    /**
+     * Get all table information
+     * Usage: List<TableInfo> allTables = H2ORM.getAllTableInfo();
+     */
+    public static java.util.List<h2.orm.core.service.TableManager.TableInfo> getAllTableInfo() {
+        return h2.orm.core.service.TableManager.getAllTableInfo();
+    }
+
+    /**
+     * Reset auto-increment counter for table
+     * Usage: H2ORM.resetAutoIncrement(User.class);
+     */
+    public static void resetAutoIncrement(Class<?> entityClass) {
+        h2.orm.core.service.TableManager.resetAutoIncrement(entityClass);
     }
 }
