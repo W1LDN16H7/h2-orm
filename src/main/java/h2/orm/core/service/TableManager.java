@@ -22,6 +22,13 @@ public class TableManager {
     private static final Logger logger = LoggerFactory.getLogger(TableManager.class);
 
     /**
+     * Private constructor to prevent instantiation
+     */
+    private TableManager() {
+        // Utility class - prevent instantiation
+    }
+
+    /**
      * Create tables for all registered entities
      */
     public static void createAll() {

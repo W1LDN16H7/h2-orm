@@ -26,6 +26,13 @@ public class H2ORM {
     private static final ExportService exportService = new ExportService();
 
     /**
+     * Private constructor to prevent instantiation
+     */
+    private H2ORM() {
+        // Utility class - prevent instantiation
+    }
+
+    /**
      * Start H2-ORM with default H2 in-memory database
      */
     public static void start() {

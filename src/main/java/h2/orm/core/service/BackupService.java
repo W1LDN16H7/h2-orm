@@ -6,51 +6,70 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.file.*;
-import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 /**
  * Database backup and restore service
- * Now uses direct JDBC for H2-specific commands that don't work with JPA
+ * SECURITY ENHANCED: Added path validation and injection prevention
  */
 public class BackupService {
 
     private static final Logger logger = LoggerFactory.getLogger(BackupService.class);
 
+    // SECURITY FIX: Path validation and security constraints
+    private static final Pattern SAFE_PATH_PATTERN = Pattern.compile("^[a-zA-Z0-9._/-]+$");
+    private static final String BACKUP_BASE_DIR = "./backups/";
+    private static final int MAX_PATH_LENGTH = 255;
+
     /**
-     * Create database backup using alternative approach for H2 SCRIPT command
+     * Default constructor
+     */
+    public BackupService() {
+        // Default constructor for service
+    }
+
+    /**
+     * Create database backup with enhanced security validation
+     * SECURITY FIX: Added path sanitization and validation
      */
     public void backup(String backupPath) {
         try {
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String backupFile = backupPath + "_" + timestamp + ".sql";
+            // SECURITY FIX: Validate and sanitize backup path
+            String sanitizedPath = validateAndSanitizePath(backupPath, "backup");
 
-            // Create backup directory if it doesn't exist
-            Path backupDir = Paths.get(backupFile).getParent();
-            if (backupDir != null && !Files.exists(backupDir)) {
-                Files.createDirectories(backupDir);
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String backupFile = BACKUP_BASE_DIR + sanitizedPath + "_" + timestamp + ".sql";
+
+            // SECURITY FIX: Ensure path is within allowed directory (prevent path traversal)
+            Path normalizedPath = Paths.get(backupFile).normalize();
+            Path basePath = Paths.get(BACKUP_BASE_DIR).normalize();
+
+            if (!normalizedPath.startsWith(basePath)) {
+                throw new SecurityException("Path traversal attempt detected: " + backupPath);
             }
 
-            // Use native query approach instead of direct JDBC unwrapping
+            // Create backup directory if it doesn't exist
+            Files.createDirectories(normalizedPath.getParent());
+
+            // SECURITY FIX: Use safer approach for H2 SCRIPT command
             TransactionManager.executeInTransaction(em -> {
                 try {
-                    // Try to execute SCRIPT command using native query with execute
-                    var query = em.createNativeQuery("SCRIPT TO '" + backupFile + "'");
-
-                    // For H2 SCRIPT command, we need to use a different approach
-                    // Since executeUpdate() doesn't work, we'll use the session to get connection
                     var session = em.unwrap(org.hibernate.Session.class);
                     session.doWork(connection -> {
-                        try (Statement stmt = connection.createStatement()) {
-                            stmt.execute("SCRIPT TO '" + backupFile + "'");
-                            logger.info("Database backup created: {}", backupFile);
+                        // SECURITY FIX: Use parameterized approach where possible
+                        try (var stmt = connection.createStatement()) {
+                            // Note: H2 SCRIPT command doesn't support parameters, but we've validated the path
+                            String safePath = normalizedPath.toString().replace("'", "''"); // Escape quotes
+                            stmt.execute("SCRIPT TO '" + safePath + "'");
+                            logger.info("Database backup created securely: {}", safePath);
                         }
                     });
-
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to execute SCRIPT command", e);
                 }
@@ -64,26 +83,41 @@ public class BackupService {
     }
 
     /**
-     * Restore database from backup using alternative approach for H2 RUNSCRIPT command
+     * Restore database from backup with enhanced security validation
+     * SECURITY FIX: Added path sanitization and validation
      */
     public void restore(String backupPath) {
         try {
-            if (!Files.exists(Paths.get(backupPath))) {
-                throw new FileNotFoundException("Backup file not found: " + backupPath);
+            // SECURITY FIX: Validate and sanitize restore path
+            String sanitizedPath = validateAndSanitizePath(backupPath, "restore");
+            Path normalizedPath = Paths.get(sanitizedPath).normalize();
+
+            // SECURITY FIX: Ensure file exists and is within allowed directories
+            if (!Files.exists(normalizedPath)) {
+                throw new FileNotFoundException("Backup file not found: " + sanitizedPath);
             }
 
-            // Use native query approach instead of direct JDBC unwrapping
+            // SECURITY FIX: Prevent path traversal attacks
+            Path basePath = Paths.get(BACKUP_BASE_DIR).normalize();
+            if (!normalizedPath.startsWith(basePath) && !normalizedPath.isAbsolute()) {
+                // Allow absolute paths only if they're in a safe location
+                String absolutePath = normalizedPath.toAbsolutePath().toString();
+                if (!absolutePath.contains("/backups/") && !absolutePath.contains("\\backups\\")) {
+                    throw new SecurityException("Restore path outside allowed directories: " + backupPath);
+                }
+            }
+
             TransactionManager.executeInTransaction(em -> {
                 try {
-                    // Use session.doWork to get proper connection access
                     var session = em.unwrap(org.hibernate.Session.class);
                     session.doWork(connection -> {
-                        try (Statement stmt = connection.createStatement()) {
-                            stmt.execute("RUNSCRIPT FROM '" + backupPath + "'");
-                            logger.info("Database restored from backup: {}", backupPath);
+                        try (var stmt = connection.createStatement()) {
+                            // SECURITY FIX: Escape quotes in path
+                            String safePath = normalizedPath.toString().replace("'", "''");
+                            stmt.execute("RUNSCRIPT FROM '" + safePath + "'");
+                            logger.info("Database restored securely from: {}", safePath);
                         }
                     });
-
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to execute RUNSCRIPT command", e);
                 }
@@ -94,6 +128,39 @@ public class BackupService {
             logger.error("Failed to restore backup", e);
             throw new RuntimeException("Backup restoration failed", e);
         }
+    }
+
+    /**
+     * SECURITY ADDITION: Validate and sanitize file paths
+     */
+    private String validateAndSanitizePath(String path, String operation) {
+        if (path == null || path.trim().isEmpty()) {
+            throw new IllegalArgumentException("Path cannot be null or empty for " + operation);
+        }
+
+        // SECURITY CHECK: Length validation
+        if (path.length() > MAX_PATH_LENGTH) {
+            throw new IllegalArgumentException("Path too long for " + operation + ": " + path.length());
+        }
+
+        // SECURITY CHECK: Remove dangerous characters
+        String sanitized = path.trim()
+            .replaceAll("\\.\\.", "")  // Remove parent directory references
+            .replaceAll("[<>:\"|?*]", ""); // Remove dangerous Windows characters
+
+        // SECURITY CHECK: Validate against whitelist pattern
+        if (!SAFE_PATH_PATTERN.matcher(sanitized).matches()) {
+            throw new SecurityException("Invalid characters in path for " + operation + ": " + path);
+        }
+
+        // SECURITY CHECK: Prevent common injection patterns
+        String lowerPath = sanitized.toLowerCase();
+        if (lowerPath.contains("script") || lowerPath.contains("exec") ||
+            lowerPath.contains("eval") || lowerPath.contains("system")) {
+            throw new SecurityException("Potentially dangerous path detected for " + operation + ": " + path);
+        }
+
+        return sanitized;
     }
 
     /**

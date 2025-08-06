@@ -137,9 +137,17 @@ public class DatabaseProperties {
     }
     
     /**
-     * Database configuration keys
+     * Property keys for database configuration
      */
     public static class Keys {
+
+        /**
+         * Private constructor to prevent instantiation
+         */
+        private Keys() {
+            // Constants class - prevent instantiation
+        }
+
         public static final String DATABASE_TYPE = "h2orm.database.type";
         public static final String DATABASE_MODE = "h2orm.database.mode";
         public static final String DATABASE_PATH = "h2orm.database.path";

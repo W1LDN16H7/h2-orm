@@ -26,14 +26,15 @@
         <developer>
             <id>w1ldn16h7</id>
             <name>W1LDN16H7</name>
-            <email>developer@h2orm.com</email>
-            <organization>H2-ORM</organization>
+            <url>https://github.com/W1LDN16H7</url>
+            <organization>W1LDN16H7 Development</organization>
             <organizationUrl>https://github.com/W1LDN16H7</organizationUrl>
             <roles>
                 <role>Lead Developer</role>
                 <role>Architect</role>
+                <role>Maintainer</role>
             </roles>
-            <timezone>+0</timezone>
+            <timezone>+5:30</timezone>
         </developer>
     </developers>
 
@@ -94,7 +95,15 @@
             <artifactId>jakarta.persistence-api</artifactId>
             <version>${jakarta.persistence.version}</version>
         </dependency>
-
+        <!-- https://mvnrepository.com/artifact/org.jboss.logmanager/jboss-logmanager -->
+        <!--
+        <dependency>
+            <groupId>org.jboss.logmanager</groupId>
+            <artifactId>jboss-logmanager</artifactId>
+            <version>3.1.2.Final</version>
+            <scope>compile</scope>
+        </dependency>
+        -->
         <dependency>
             <groupId>org.hibernate.orm</groupId>
             <artifactId>hibernate-core</artifactId>
@@ -178,6 +187,20 @@
             <version>${logback.version}</version>
         </dependency>
 
+        <!-- Log4j to SLF4J Bridge - Routes Log4j calls to SLF4J -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-to-slf4j</artifactId>
+            <version>2.24.3</version>
+        </dependency>
+
+        <!-- JUL to SLF4J Bridge - Routes Java Util Logging to SLF4J -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jul-to-slf4j</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -220,9 +243,6 @@
                     <excludes>
                         <exclude>**/*IntegrationTest.java</exclude>
                     </excludes>
-                    <systemPropertyVariables>
-                        <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
-                    </systemPropertyVariables>
                 </configuration>
             </plugin>
 
@@ -408,4 +428,3 @@
         </repository>
     </distributionManagement>
 </project>
-

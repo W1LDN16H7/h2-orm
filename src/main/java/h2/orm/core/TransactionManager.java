@@ -29,8 +29,18 @@ public class TransactionManager {
     /**
      * Execute void operation in transaction
      */
-    public static void executeInTransaction(VoidTransactionCallback callback) {
+    public static void executeVoidInTransaction(VoidTransactionCallback callback) {
         EntityManagerProvider.executeInTransaction(em -> {
+            callback.execute(em);
+            return null;
+        });
+    }
+
+    /**
+     * Execute void operation in transaction with named configuration
+     */
+    public static void executeVoidInTransaction(String configName, VoidTransactionCallback callback) {
+        EntityManagerProvider.executeInTransaction(configName, em -> {
             callback.execute(em);
             return null;
         });

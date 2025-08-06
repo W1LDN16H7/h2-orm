@@ -45,7 +45,7 @@ public class Order {
         this.customer = customer;
         this.status = status;
         this.amount = amount;
-
+        
         if (status == Status.PROCESSED) {
             this.processedDate = LocalDateTime.now();
         }
@@ -54,7 +54,7 @@ public class Order {
     // Status enum
     public enum Status {
         NEW,
-        PROCESSED,
+        PROCESSED, 
         SHIPPED,
         DELIVERED,
         CANCELLED,

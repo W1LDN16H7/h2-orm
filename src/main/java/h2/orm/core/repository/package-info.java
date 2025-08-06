@@ -31,8 +31,9 @@
  *   <li>{@link h2.orm.core.repository.Repositories} - Repository factory</li>
  * </ul>
  *
- * @author H2-ORM Team
+ * @author W1LDN16H7
  * @version 1.0.0
  * @since 1.0.0
+ * @see <a href="https://github.com/W1LDN16H7/h2-orm">GitHub Repository</a>
  */
 package h2.orm.core.repository;

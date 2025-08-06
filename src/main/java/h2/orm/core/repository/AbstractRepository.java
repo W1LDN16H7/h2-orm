@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Abstract JPA Repository implementation similar to Spring Data JPA
@@ -25,6 +26,10 @@ import java.util.Optional;
 public abstract class AbstractRepository<T, ID extends Serializable> implements JpaRepository<T, ID> {
 
     private static final Logger logger = LoggerFactory.getLogger(AbstractRepository.class);
+
+    // SECURITY ADDITION: Input validation constants
+    private static final int MAX_PAGE_SIZE = 1000;
+    private static final int MAX_BATCH_SIZE = 1000;
 
     protected final Class<T> entityClass;
 
@@ -307,17 +312,89 @@ public abstract class AbstractRepository<T, ID extends Serializable> implements 
         return ExceptionHandler.safeExecute("find all entities with sort", () -> {
             String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e";
             if (sort.isSorted()) {
-                jpql += sort.toOrderByClause("e");
+                // Validate sort fields before executing query
+                Sort validatedSort = validateAndFilterSort(sort);
+                if (validatedSort.isSorted()) {
+                    jpql += validatedSort.toOrderByClause("e");
+                }
             }
             return QueryExecutor.executeQuery(jpql, entityClass);
         });
     }
 
+    /**
+     * Validates sort fields and filters out invalid ones to prevent query failures
+     */
+    private Sort validateAndFilterSort(Sort sort) {
+        if (sort.isUnsorted()) {
+            return sort;
+        }
+
+        List<Sort.Order> validOrders = new ArrayList<>();
+        for (Sort.Order order : sort) {
+            if (isValidSortField(order.getProperty())) {
+                validOrders.add(order);
+            } else {
+                // Log warning but don't fail - just skip invalid fields
+                logger.warn("Ignoring invalid sort field: {} for entity: {}",
+                           order.getProperty(), entityClass.getSimpleName());
+            }
+        }
+
+        return validOrders.isEmpty() ? Sort.unsorted() : Sort.by(validOrders.toArray(new Sort.Order[0]));
+    }
+
+    /**
+     * SECURITY ENHANCED: Improved sort field validation
+     */
+    private boolean isValidSortField(String fieldName) {
+        // SECURITY CHECK: Basic validation
+        if (fieldName == null || fieldName.trim().isEmpty()) {
+            return false;
+        }
+
+        // SECURITY CHECK: Length validation
+        if (fieldName.length() > 50) {
+            logger.warn("Sort field name too long: {}", fieldName);
+            return false;
+        }
+
+        // SECURITY CHECK: Pattern validation (only allow alphanumeric and underscore)
+        if (!fieldName.matches("^[a-zA-Z][a-zA-Z0-9_]*$")) {
+            logger.warn("Invalid sort field name pattern: {}", fieldName);
+            return false;
+        }
+
+        try {
+            // Use reflection to check if the field exists on the entity class
+            entityClass.getDeclaredField(fieldName);
+            return true;
+        } catch (NoSuchFieldException e) {
+            // Also check for JPA attribute mappings using EntityManager metamodel
+            try {
+                EntityManager em = getEntityManager();
+                var metamodel = em.getMetamodel();
+                var entityType = metamodel.entity(entityClass);
+                entityType.getAttribute(fieldName);
+                return true;
+            } catch (Exception ex) {
+                logger.debug("Field not found in entity or metamodel: {}", fieldName);
+                return false;
+            }
+        } catch (Exception e) {
+            logger.warn("Error validating sort field: {}", fieldName, e);
+            return false;
+        }
+    }
+
     @Override
     public Page<T> findAll(Pageable pageable) {
         return ExceptionHandler.safeExecute("find all entities with pagination", () -> {
+            // SECURITY FIX: Validate pagination parameters
+            validatePaginationSecurity(pageable);
+
             // First, get the total count
-            String countJpql = "SELECT COUNT(e) FROM " + entityClass.getSimpleName() + " e";
+            String countJpql = "SELECT COUNT(e) FROM " + getSecureEntityName() + " e";
             Long total = QueryExecutor.executeSingleResultQuery(countJpql, Long.class);
 
             if (total == 0) {
@@ -325,9 +402,13 @@ public abstract class AbstractRepository<T, ID extends Serializable> implements 
             }
 
             // Then get the actual data
-            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e";
+            String jpql = "SELECT e FROM " + getSecureEntityName() + " e";
             if (pageable.getSort().isSorted()) {
-                jpql += pageable.getSort().toOrderByClause("e");
+                // SECURITY FIX: Validate sort fields before adding to query
+                Sort validatedSort = validateAndFilterSort(pageable.getSort());
+                if (validatedSort.isSorted()) {
+                    jpql += validatedSort.toOrderByClause("e");
+                }
             }
 
             EntityManager em = getEntityManager();
@@ -347,25 +428,50 @@ public abstract class AbstractRepository<T, ID extends Serializable> implements 
         });
     }
 
-    // Query methods implementation
+    /**
+     * SECURITY ADDITION: Validate pagination parameters to prevent DoS
+     */
+    private void validatePaginationSecurity(Pageable pageable) {
+        if (pageable.getPageSize() > MAX_PAGE_SIZE) {
+            throw new SecurityException("Page size too large: " + pageable.getPageSize() +
+                                      ". Maximum allowed: " + MAX_PAGE_SIZE);
+        }
 
-    @Override
-    public List<T> findByField(String fieldName, Object value) {
-        return ExceptionHandler.safeExecute("find entities by field " + fieldName, () -> {
-            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " = :value";
-            return QueryExecutor.executeQuery(jpql, entityClass, Map.of("value", value));
-        });
+        if (pageable.getPageSize() <= 0) {
+            throw new IllegalArgumentException("Page size must be positive: " + pageable.getPageSize());
+        }
+
+        if (pageable.getPageNumber() < 0) {
+            throw new IllegalArgumentException("Page number cannot be negative: " + pageable.getPageNumber());
+        }
+
+        // Prevent extremely large offset calculations that could cause overflow
+        long offset = pageable.getOffset();
+        if (offset > Integer.MAX_VALUE) {
+            throw new SecurityException("Page offset too large: " + offset);
+        }
     }
 
-    @Override
-    public List<T> findByField(String fieldName, Object value, Sort sort) {
-        return ExceptionHandler.safeExecute("find entities by field " + fieldName + " with sort", () -> {
-            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " = :value";
-            if (sort.isSorted()) {
-                jpql += sort.toOrderByClause("e");
-            }
-            return QueryExecutor.executeQuery(jpql, entityClass, Map.of("value", value));
-        });
+    /**
+     * SECURITY ADDITION: Get validated entity name to prevent injection
+     * Updated to be flexible while maintaining security
+     */
+    private String getSecureEntityName() {
+        String entityName = entityClass.getSimpleName();
+
+        // FLEXIBLE SECURITY: Validate the name pattern instead of using rigid whitelist
+        // This allows any valid Java class name while preventing injection
+        if (!entityName.matches("^[A-Z][a-zA-Z0-9]*$")) {
+            throw new SecurityException("Invalid entity name pattern: " + entityName +
+                                      ". Entity names must start with uppercase letter and contain only alphanumeric characters.");
+        }
+
+        // Additional length check for security
+        if (entityName.length() > 100) {
+            throw new SecurityException("Entity name too long: " + entityName.length() + " characters");
+        }
+
+        return entityName;
     }
 
     @Override
@@ -400,6 +506,26 @@ public abstract class AbstractRepository<T, ID extends Serializable> implements 
             } finally {
                 EntityManagerProvider.closeEntityManager();
             }
+        });
+    }
+
+
+    @Override
+    public List<T> findByField(String fieldName, Object value) {
+        return ExceptionHandler.safeExecute("find entities by field " + fieldName, () -> {
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " = :value";
+            return QueryExecutor.executeQuery(jpql, entityClass, Map.of("value", value));
+        });
+    }
+
+    @Override
+    public List<T> findByField(String fieldName, Object value, Sort sort) {
+        return ExceptionHandler.safeExecute("find entities by field " + fieldName + " with sort", () -> {
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e." + fieldName + " = :value";
+            if (sort.isSorted()) {
+                jpql += sort.toOrderByClause("e");
+            }
+            return QueryExecutor.executeQuery(jpql, entityClass, Map.of("value", value));
         });
     }
 

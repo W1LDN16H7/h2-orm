@@ -1,62 +1,49 @@
-/**
- * H2-ORM Library Module
- *
- * A lightweight, Spring Boot-style ORM library for H2 database with support for multiple databases.
- * Provides easy-to-use repository pattern, automatic backup/export features, and transaction management.
- *
- * @author H2-ORM Team
- * @since 1.0.0
- */
 module h2orm {
-
-    // ===== REQUIRED DEPENDENCIES =====
-
-    // JPA and Hibernate
-    requires jakarta.persistence;
-    requires org.hibernate.orm.core;
-
-    // Database drivers
+    // Core Java modules
+    requires java.base;
     requires java.sql;
+    requires java.logging;
+    requires java.desktop;
+
+    // H2 Database
     requires com.h2database;
+
+    // Jakarta Persistence API (transitive export for clients)
+    requires transitive jakarta.persistence;
 
     // Jackson for JSON processing
     requires com.fasterxml.jackson.core;
     requires com.fasterxml.jackson.databind;
-    requires com.fasterxml.jackson.datatype.jsr310;
+    requires com.fasterxml.jackson.annotation;
 
     // Apache POI for Excel export
     requires org.apache.poi.poi;
     requires org.apache.poi.ooxml;
 
-    // Logging
+    // SLF4J for logging
     requires org.slf4j;
-    requires ch.qos.logback.classic;
 
-    // Connection pooling
-    requires com.zaxxer.hikari;
+    // Apache Commons Math (automatic module)
+    requires commons.math3;
+    requires org.hibernate.orm.core;
+    requires com.fasterxml.jackson.datatype.jsr310;
 
-    // Utilities
-    requires java.base;
-    requires java.naming;
-
-    // ===== EXPORTED PACKAGES =====
-
-    // Main API - what users will import
+    // Export main packages - SECURITY FIX: Removed example package export
     exports h2.orm;
 
-    // Configuration API
     exports h2.orm.config;
-
-    // Repository API (Spring Boot style)
+    exports h2.orm.core;
     exports h2.orm.core.repository;
-
-    // Service APIs for advanced users
     exports h2.orm.core.service;
 
-    // Exception types
-    exports h2.orm.exception.types;
 
-    // ===== OPENS FOR REFLECTION =====
-    // Allow Hibernate and Jackson to access entities via reflection
-    opens h2.orm.example to org.hibernate.orm.core, com.fasterxml.jackson.databind;
+    // SECURITY FIX: Do NOT export example package
+    // exports h2.orm.example; // REMOVED - Internal examples should not be public API
+
+    // Open packages for reflection (needed for entity processing)
+    opens h2.orm.config to com.fasterxml.jackson.databind;
+    opens h2.orm.core to com.fasterxml.jackson.databind;
+
+    // Open example package to Hibernate for entity reflection access (internal use only)
+    opens h2.orm.example to org.hibernate.orm.core, jakarta.persistence;
 }

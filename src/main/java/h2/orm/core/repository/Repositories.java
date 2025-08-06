@@ -17,6 +17,13 @@ public class Repositories {
     private static final Map<Class<?>, JpaRepository<?, ?>> repositoryCache = new ConcurrentHashMap<>();
 
     /**
+     * Private constructor to prevent instantiation
+     */
+    private Repositories() {
+        // Utility class - prevent instantiation
+    }
+
+    /**
      * Get repository for entity class - creates it automatically if needed
      * Usage: UserRepository userRepo = Repositories.of(User.class);
      */

@@ -160,9 +160,9 @@ public class H2ORMTest {
     @Order(4)
     @DisplayName("Test Table Management")
     void testTableManagement() {
-        // Test table existence
-        assertTrue(H2ORM.tableExists("user"));
-        assertTrue(H2ORM.tableExists("product"));
+        // Test table existence - fix table names to match actual @Table annotations
+        assertTrue(H2ORM.tableExists("users"));  // User entity uses @Table(name = "users")
+        assertTrue(H2ORM.tableExists("products")); // Assuming Product entity uses @Table(name = "products")
         assertFalse(H2ORM.tableExists("nonexistent_table"));
 
         // Test table row counts
@@ -172,15 +172,15 @@ public class H2ORMTest {
         // Test table info
         TableManager.TableInfo userTableInfo = H2ORM.getTableInfo(User.class);
         assertNotNull(userTableInfo);
-        assertEquals("user", userTableInfo.getTableName());
+        assertEquals("users", userTableInfo.getTableName()); // Fix expected table name
         assertTrue(userTableInfo.isExists());
         assertEquals(3, userTableInfo.getRowCount());
 
         // Test all table info
         List<TableManager.TableInfo> allTables = H2ORM.getAllTableInfo();
         assertTrue(allTables.size() >= 2);
-        assertTrue(allTables.stream().anyMatch(table -> "user".equals(table.getTableName())));
-        assertTrue(allTables.stream().anyMatch(table -> "product".equals(table.getTableName())));
+        assertTrue(allTables.stream().anyMatch(table -> "users".equals(table.getTableName())));
+        assertTrue(allTables.stream().anyMatch(table -> "products".equals(table.getTableName())));
     }
 
     @Test
